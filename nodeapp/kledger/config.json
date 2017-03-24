@@ -1,6 +1,6 @@
 {
     "chainName": "fabric-client1",
-    "chaincodeID": "mycc_marbles",
+    "chaincodeID": "mycc",
     "channelID": "myc1",
     "goPath": "/home/kaka/develop/fabric/codespace/chaincodes",
     "chaincodePath": "marbles02",
