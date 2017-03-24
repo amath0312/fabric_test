@@ -1,8 +1,8 @@
 {
     "chainName": "fabric-client1",
-    "chaincodeID": "mycc_marbles",
+    "chaincodeID": "mycc_marbles3",
     "channelID": "myc1",
-    "goPath": "/home/kaka/develop/fabric",
+    "goPath": "/home/kaka/develop/fabric/codespace/chaincodes",
     "chaincodePath": "marbles02",
     "keyValueStore": "/tmp/fabric-client-kvs",
     "waitTime": "30000",
