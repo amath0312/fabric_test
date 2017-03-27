@@ -36,10 +36,13 @@ var chain;
 var eventhub;
 var tx_id = null;
 
-// getChaincodeVersion();
+var enterpriseId = "kaka3";
+var taskid = 'test_task_15';
+var transIds = [];
 
-// createEnterprice(
-//     'kaka', [
+// getChaincodeVersion();
+// createEnterprise(
+//     enterpriseId, [
 //         { "id": "0001", "balance": 100 },
 //         { "id": "0002", "balance": 200 },
 //         { "id": "0003", "balance": 300 },
@@ -48,7 +51,30 @@ var tx_id = null;
 //     ]
 // );
 
-getEnterprice("kaka");
+// addAccounts(
+//     enterpriseId, [
+//         { "id": "2001", "balance": 2100 },
+//         { "id": "2002", "balance": 2200 },
+//         { "id": "2003", "balance": 2300 }
+//     ]
+// );
+
+// getEnterprise(enterpriseId);
+// makeTransactions(
+//     taskid, [
+//         { "fromEnterprise": enterpriseId, "fromAccount": "0001", "toEnterprise": enterpriseId, "toAccount": "0002", "amount": "50", "date": "20170325", "time": "120000" }, //0001 30, 0002 260
+//         { "fromEnterprise": enterpriseId, "fromAccount": "2001", "toEnterprise": enterpriseId, "toAccount": "0001", "amount": "20", "date": "20170326", "time": "121000" }, //2001 2100, 0001 50
+//         { "fromEnterprise": enterpriseId, "fromAccount": "2001", "toEnterprise": enterpriseId, "toAccount": "0001", "amount": "30", "date": "20170327", "time": "121000" }, //2001 2070, 0001 80
+//         { "fromEnterprise": enterpriseId, "fromAccount": "0001", "toEnterprise": enterpriseId, "toAccount": "2001", "amount": "80", "date": "20170328", "time": "121000" } //0001 0, 2001 2150
+//     ]
+// );
+
+// getTask(taskid);
+//20170327_3822591408144996
+
+// getTransaction(transIds[1]);
+queryTransactionsByDate("20170326", "20170327");
+
 
 function getChaincodeVersion() {
     _init(false);
@@ -93,7 +119,7 @@ function getChaincodeVersion() {
 }
 
 
-function createEnterprice(enterpriceId, accounts) {
+function createEnterprise(enterpriseId, accounts) {
     _init(true);
 
     hfc.newDefaultKeyValueStore({
@@ -103,12 +129,12 @@ function createEnterprice(enterpriceId, accounts) {
         return helper.getSubmitter(client);
     }).then(
         function(admin) {
-            logger.info('Successfully obtained user to initial enterprice.');
+            logger.info('Successfully obtained user to initial Enterprise.');
             logger.info('Executing transaction');
             tx_id = helper.getTxId();
             var nonce = utils.getNonce();
             var args = []
-            args.push(enterpriceId);
+            args.push(enterpriseId);
             accounts.forEach(function(account) {
                 args.push(account.id, account.balance.toString());
             });
@@ -116,7 +142,7 @@ function createEnterprice(enterpriceId, accounts) {
             // send proposal to endorser
             var request = {
                 chaincodeId: config.chaincodeID,
-                fcn: "createEnterprice",
+                fcn: "createEnterprise",
                 args: args,
                 chainId: config.channelID,
                 txId: tx_id,
@@ -138,8 +164,98 @@ function createEnterprice(enterpriceId, accounts) {
     );
 }
 
+function addAccounts(enterpriseId, accounts) {
+    _init(true);
 
-function getEnterprice(enterpriceId) {
+    hfc.newDefaultKeyValueStore({
+        path: config.keyValueStore
+    }).then(function(store) {
+        client.setStateStore(store);
+        return helper.getSubmitter(client);
+    }).then(
+        function(admin) {
+            logger.info('Successfully obtained user to initial Enterprise.');
+            logger.info('Executing transaction');
+            tx_id = helper.getTxId();
+            var nonce = utils.getNonce();
+            var args = []
+            args.push(enterpriseId);
+            accounts.forEach(function(account) {
+                args.push(account.id, account.balance.toString());
+            });
+
+            // send proposal to endorser
+            var request = {
+                chaincodeId: config.chaincodeID,
+                fcn: "addAccountsToEnterprise",
+                args: args,
+                chainId: config.channelID,
+                txId: tx_id,
+                nonce: nonce
+            };
+            return chain.sendTransactionProposal(request);
+        }
+    ).then(
+        function(results) {
+            logger.info('Successfully obtained proposal responses from endorsers');
+
+            return helper.processProposal(chain, results, 'move');
+        }
+    ).then(_processProposalResult).catch(
+        function(err) {
+            eventhub.disconnect();
+            logger.error('Failed to invoke transaction due to error: ' + err.stack ? err.stack : err);
+        }
+    );
+}
+
+function makeTransactions(taskId, transactions) {
+    _init(true);
+
+    hfc.newDefaultKeyValueStore({
+        path: config.keyValueStore
+    }).then(function(store) {
+        client.setStateStore(store);
+        return helper.getSubmitter(client);
+    }).then(
+        function(admin) {
+            logger.info('Successfully obtained user to initial Enterprise.');
+            logger.info('Executing transaction');
+            tx_id = helper.getTxId();
+            var nonce = utils.getNonce();
+            var args = []
+            args.push(taskId);
+            transactions.forEach(function(t) {
+                //Trans1_From_Enterprise,Trans1_From_Account,Trans1_To_Enterprise,Trans1_to_Account,Trans1_Amount,Trans1_Date,Trans1_Time
+                args.push(t.fromEnterprise, t.fromAccount, t.toEnterprise, t.toAccount, t.amount.toString(), t.date, t.time);
+            });
+            logger.info(args);
+            // send proposal to endorser
+            var request = {
+                chaincodeId: config.chaincodeID,
+                fcn: "makeTransactions",
+                args: args,
+                chainId: config.channelID,
+                txId: tx_id,
+                nonce: nonce
+            };
+            return chain.sendTransactionProposal(request);
+        }
+    ).then(
+        function(results) {
+            logger.info('Successfully obtained proposal responses from endorsers');
+
+            return helper.processProposal(chain, results, 'move');
+        }
+    ).then(_processProposalResult).catch(
+        function(err) {
+            eventhub.disconnect();
+            logger.error('Failed to invoke transaction due to error: ' + err.stack ? err.stack : err);
+        }
+    );
+}
+
+function getEnterprise(enterpriseId) {
     _init(false);
     hfc.newDefaultKeyValueStore({
         path: config.keyValueStore
@@ -162,8 +278,8 @@ function getEnterprice(enterpriceId) {
                 chainId: config.channelID,
                 txId: utils.buildTransactionID(),
                 nonce: utils.getNonce(),
-                fcn: "getEnterprice",
-                args: [enterpriceId]
+                fcn: "getEnterprise",
+                args: [enterpriseId]
             };
             // Query chaincode
             return chain.queryByChaincode(request);
@@ -171,7 +287,7 @@ function getEnterprice(enterpriceId) {
     ).then(
         function(response_payloads) {
             for (let i = 0; i < response_payloads.length; i++) {
-                logger.info('############### enterprice: \r\n    %s', response_payloads[i].toString('utf8'));
+                logger.info('############### Enterprise: \r\n    %s', response_payloads[i].toString('utf8'));
             }
         }
     ).catch(
@@ -181,6 +297,131 @@ function getEnterprice(enterpriceId) {
     );
 }
 
+function getTask(taskId) {
+    _init(false);
+    hfc.newDefaultKeyValueStore({
+        path: config.keyValueStore
+    }).then(function(store) {
+        client.setStateStore(store);
+        return helper.getSubmitter(client);
+    }).then(
+        function(admin) {
+            logger.info('Successfully obtained enrolled user to perform query');
+
+            logger.info('Executing Query');
+            var targets = [];
+            for (var i = 0; i < config.peers.length; i++) {
+                targets.push(config.peers[i]);
+            }
+            //chaincode query request
+            var request = {
+                targets: targets,
+                chaincodeId: config.chaincodeID,
+                chainId: config.channelID,
+                txId: utils.buildTransactionID(),
+                nonce: utils.getNonce(),
+                fcn: "getTask",
+                args: [taskId]
+            };
+            // Query chaincode
+            return chain.queryByChaincode(request);
+        }
+    ).then(
+        function(response_payloads) {
+            for (let i = 0; i < response_payloads.length; i++) {
+                logger.info('############### Enterprise: \r\n    %s', response_payloads[i].toString('utf8'));
+            }
+        }
+    ).catch(
+        function(err) {
+            logger.error('Failed to end to end test with error:' + err.stack ? err.stack : err);
+        }
+    );
+}
+
+function getTransaction(transactionId) {
+    _init(false);
+    hfc.newDefaultKeyValueStore({
+        path: config.keyValueStore
+    }).then(function(store) {
+        client.setStateStore(store);
+        return helper.getSubmitter(client);
+    }).then(
+        function(admin) {
+            logger.info('Successfully obtained enrolled user to perform query');
+
+            logger.info('Executing Query');
+            var targets = [];
+            for (var i = 0; i < config.peers.length; i++) {
+                targets.push(config.peers[i]);
+            }
+            //chaincode query request
+            var request = {
+                targets: targets,
+                chaincodeId: config.chaincodeID,
+                chainId: config.channelID,
+                txId: utils.buildTransactionID(),
+                nonce: utils.getNonce(),
+                fcn: "getTransaction",
+                args: [transactionId]
+            };
+            // Query chaincode
+            return chain.queryByChaincode(request);
+        }
+    ).then(
+        function(response_payloads) {
+            for (let i = 0; i < response_payloads.length; i++) {
+                logger.info('############### Enterprise: \r\n    %s', response_payloads[i].toString('utf8'));
+            }
+        }
+    ).catch(
+        function(err) {
+            logger.error('Failed to end to end test with error:' + err.stack ? err.stack : err);
+        }
+    );
+}
+
+function queryTransactionsByDate(from, to) {
+    _init(false);
+    hfc.newDefaultKeyValueStore({
+        path: config.keyValueStore
+    }).then(function(store) {
+        client.setStateStore(store);
+        return helper.getSubmitter(client);
+    }).then(
+        function(admin) {
+            logger.info('Successfully obtained enrolled user to perform query');
+
+            logger.info('Executing Query');
+            var targets = [];
+            for (var i = 0; i < config.peers.length; i++) {
+                targets.push(config.peers[i]);
+            }
+            //chaincode query request
+            var request = {
+                targets: targets,
+                chaincodeId: config.chaincodeID,
+                chainId: config.channelID,
+                txId: utils.buildTransactionID(),
+                nonce: utils.getNonce(),
+                fcn: "queryTransactionsByDate",
+                args: [from, to]
+            };
+            // Query chaincode
+            return chain.queryByChaincode(request);
+        }
+    ).then(
+        function(response_payloads) {
+            for (let i = 0; i < response_payloads.length; i++) {
+                logger.info('############### Transactions: \r\n    %s', response_payloads[i].toString('utf8'));
+            }
+        }
+    ).catch(
+        function(err) {
+            logger.error('Failed to end to end test with error:' + err.stack ? err.stack : err);
+        }
+    );
+}
 
 function _init(subscribeEvent) {
     if (chain) {
