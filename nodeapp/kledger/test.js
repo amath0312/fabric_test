@@ -37,7 +37,7 @@ var eventhub;
 var tx_id = null;
 
 var enterpriseId = "kaka3";
-var taskid = 'test_task_15';
+var taskid = 'test_task_17';
 var transIds = [];
 
 // getChaincodeVersion();
@@ -65,7 +65,7 @@ var transIds = [];
 //         { "fromEnterprise": enterpriseId, "fromAccount": "0001", "toEnterprise": enterpriseId, "toAccount": "0002", "amount": "50", "date": "20170325", "time": "120000" }, //0001 30, 0002 260
 //         { "fromEnterprise": enterpriseId, "fromAccount": "2001", "toEnterprise": enterpriseId, "toAccount": "0001", "amount": "20", "date": "20170326", "time": "121000" }, //2001 2100, 0001 50
 //         { "fromEnterprise": enterpriseId, "fromAccount": "2001", "toEnterprise": enterpriseId, "toAccount": "0001", "amount": "30", "date": "20170327", "time": "121000" }, //2001 2070, 0001 80
-//         { "fromEnterprise": enterpriseId, "fromAccount": "0001", "toEnterprise": enterpriseId, "toAccount": "2001", "amount": "80", "date": "20170328", "time": "121000" } //0001 0, 2001 2150
+//         { "fromEnterprise": enterpriseId, "fromAccount": "0002", "toEnterprise": enterpriseId, "toAccount": "2001", "amount": "80", "date": "20170328", "time": "121000" } //0001 0, 2001 2150
 //     ]
 // );
 
@@ -73,8 +73,8 @@ var transIds = [];
 //20170327_3822591408144996
 
 // getTransaction(transIds[1]);
-queryTransactionsByDate("20170326", "20170327");
-
+// queryTransactionsByDate("20170326", "20170327");
+queryTransactionByAccount(enterpriseId, "0001")
 
 function getChaincodeVersion() {
     _init(false);
@@ -406,6 +406,48 @@ function queryTransactionsByDate(from, to) {
                 nonce: utils.getNonce(),
                 fcn: "queryTransactionsByDate",
                 args: [from, to]
+            };
+            // Query chaincode
+            return chain.queryByChaincode(request);
+        }
+    ).then(
+        function(response_payloads) {
+            for (let i = 0; i < response_payloads.length; i++) {
+                logger.info('############### Transactions: \r\n    %s', response_payloads[i].toString('utf8'));
+            }
+        }
+    ).catch(
+        function(err) {
+            logger.error('Failed to end to end test with error:' + err.stack ? err.stack : err);
+        }
+    );
+}
+
+function queryTransactionByAccount(enterpriseId, accountId) {
+    _init(false);
+    hfc.newDefaultKeyValueStore({
+        path: config.keyValueStore
+    }).then(function(store) {
+        client.setStateStore(store);
+        return helper.getSubmitter(client);
+    }).then(
+        function(admin) {
+            logger.info('Successfully obtained enrolled user to perform query');
+
+            logger.info('Executing Query');
+            var targets = [];
+            for (var i = 0; i < config.peers.length; i++) {
+                targets.push(config.peers[i]);
+            }
+            //chaincode query request
+            var request = {
+                targets: targets,
+                chaincodeId: config.chaincodeID,
+                chainId: config.channelID,
+                txId: utils.buildTransactionID(),
+                nonce: utils.getNonce(),
+                fcn: "queryTransactionByAccount",
+                args: [enterpriseId, accountId]
             };
             // Query chaincode
             return chain.queryByChaincode(request);
