@@ -14,10 +14,11 @@ import (
 	"sync"
 	"time"
 )
-const Version string = "0.0.14"
+const Version string = "0.0.5"
 
 const ENTERPRISE_STATUS_NORMAL = "NORMAL"
 const ENTERPRISE_STATUS_CLOSED = "CLOSED"
+const ENTERPRISE_STATUS_FROZEN = "FROZEN"
 
 const PREFIX_ENTERPRISE = "ENTPRISE_"
 const PREFIX_TASK = "TASK0000_"
@@ -36,7 +37,7 @@ type TransactionTask struct{
 	TaskID	string `json:"TaskID"`
 	TransactionIDList	[]string `json:"TransactionIDList"`
 }
-
+// transaction id is like 20170324_3390569288041060
 type Transaction struct {
 	TransactionID		string `json:"TransactionID"` 
 	FromEnterprise		string `json:"FromEnterprise"`
@@ -52,6 +53,7 @@ type Transaction struct {
 	TransactionTime     string `json:"TransactionTime"`
 }
 
+// Enterprise id is like ENTPRISE_Enterpriseid
 type Enterprise struct{
 	EnterpriseID	string `json:"EnterpriseID"`
 	Status			string `json:"Status"`
@@ -96,8 +98,8 @@ func (t *SimpleChaincode) Invoke(stub shim.ChaincodeStubInterface) pb.Response {
 		return t.createEnterprise(stub, args)
 	}else if function == "getEnterprise"{
 		return t.getEnterprise(stub, args)
-	}else if function == "addAccountsToEnterprise"{
-		return t.addAccountsToEnterprise(stub,args)
+	}else if function == "addAccounts"{
+		return t.addAccounts(stub,args)
 	}else if function == "makeTransactions"{
 		return t.makeTransactions(stub,args)
 	}else if function == "getTask"{
@@ -106,8 +108,8 @@ func (t *SimpleChaincode) Invoke(stub shim.ChaincodeStubInterface) pb.Response {
 		return t.getTransaction(stub, args)
 	}else if function == "queryTransactionsByDate"{
 		return t.queryTransactionsByDate(stub, args)
-	}else if function == "queryTransactionByAccount"{
-		return t.queryTransactionByAccount(stub, args)
+	}else if function == "queryTransaction"{
+		return t.queryTransaction(stub, args)
 	}
 
 	return shim.Success(nil)
@@ -124,92 +126,56 @@ func (t *SimpleChaincode) createEnterprise(stub shim.ChaincodeStubInterface, arg
 	if len(args)%2 == 0 {
 		return shim.Error("usage: EnterpriseId, amount1, balance1, amount2, balance2, ...")
 	}
-	// transaction id is like 20170324_3390569288041060
-	// Enterprise id is like ENTPRISE_Enterpriseid
-
-	EnterpriseId := PREFIX_ENTERPRISE+args[0]
-	EnterpriseAsBytes, err := stub.GetState(EnterpriseId)
-
-	if err != nil {
-		return shim.Error("Failed to get Enterprise: " + err.Error())
-	} else if EnterpriseAsBytes != nil {
-		fmt.Println("This Enterprise already exists: " + args[0])
+	
+	hasEnterprise, err := t.hasEnterprise(stub, args[0])
+	if err != nil{
+		return shim.Error(err.Error())
+	}else if hasEnterprise{
 		return shim.Error("This Enterprise already exists: " + args[0])
 	}
 
-	accounts := make(map[string]Account)
-	accountsCnt := (len(args)-1)/2
-	for i:=0;i<accountsCnt;i++ {
-		accountId := args[2*i+1]
-		balance := args[2*i+2]
-		account := Account{accountId, balance}
-		accounts[accountId] = account
-	}
-
-	Enterprise := &Enterprise{args[0], ENTERPRISE_STATUS_NORMAL,accounts}
-	EnterpriseJSONasBytes, err := json.Marshal(Enterprise)
+	enterprise := &Enterprise{args[0], ENTERPRISE_STATUS_NORMAL,nil}
+	err = t.addAccountsToEnterprise(enterprise, args[1:])
 	if err != nil {
 		return shim.Error(err.Error())
 	}
 
-	err = stub.PutState(EnterpriseId, EnterpriseJSONasBytes)
-	if err != nil {
-		return shim.Error(err.Error())
+	err = t.saveEnterprise(stub, enterprise)
+	if err != nil{
+		shim.Error(err.Error())
 	}
-
 	return shim.Success(nil)
 }
-func (t *SimpleChaincode) addAccountsToEnterprise(stub shim.ChaincodeStubInterface, args []string) pb.Response {
+
+func (t *SimpleChaincode) addAccounts(stub shim.ChaincodeStubInterface, args []string) pb.Response {
 	if len(args) == 0 {
 		return shim.Error("Incorrect number of arguments. Expecting more than 1")
 	}
 	if len(args)%2 == 0 {
 		return shim.Error("usage: EnterpriseId, amount1, balance1, amount2, balance2, ...")
 	}
-	// transaction id is like 20170324_3390569288041060
-	// Enterprise id is like Enterprise_Enterpriseid
 
-	EnterpriseId := PREFIX_ENTERPRISE+args[0]
-	EnterpriseAsBytes, err := stub.GetState(EnterpriseId)
-
-	if err != nil {
-		return shim.Error("Failed to get Enterprise: " + err.Error())
-	} else if EnterpriseAsBytes == nil {
-		fmt.Println("This Enterprise don't exist: " + args[0])
+	enterpriseAsBytes, err := t.getEnterpriseAsBytes(stub, args[0])
+	if err != nil{
+		return shim.Error(err.Error())
+	}else if enterpriseAsBytes == nil{
 		return shim.Error("This Enterprise don't exist: " + args[0])
 	}
 
-	Enterprise := Enterprise{}
-	err = json.Unmarshal(EnterpriseAsBytes, &Enterprise)
+	enterprise := Enterprise{}
+	err = json.Unmarshal(enterpriseAsBytes, &enterprise)
 	if err != nil{
 		return shim.Error(err.Error())
 	}
 
-	accountsCnt := (len(args)-1)/2
-	accounts := Enterprise.Accounts
-	// verify accounts whether is already existed
-	for i:=0;i<accountsCnt;i++ {
-		accountId := args[2*i+1]
-		if _, ok := accounts[accountId]; ok{
-			return shim.Error("thie account already exists: "+accountId)
-		}
-	}
-
-	for i:=0;i<accountsCnt;i++ {
-		accountId := args[2*i+1]
-		balance := args[2*i+2]
-		account := Account{accountId, balance}
-		accounts[accountId] = account
+	err = t.addAccountsToEnterprise(&enterprise, args[1:])
+	if err != nil {
+		return shim.Error(err.Error())
 	}
 	
-	EnterpriseJSONasBytes, err := json.Marshal(Enterprise)
-	if err != nil {
-		return shim.Error(err.Error())
-	}
-
-	err = stub.PutState(EnterpriseId, EnterpriseJSONasBytes)
-	if err != nil {
-		return shim.Error(err.Error())
+	err = t.saveEnterprise(stub, &enterprise)
+	if err != nil{
+		shim.Error(err.Error())
 	}
 
 	return shim.Success(nil)
@@ -222,13 +188,12 @@ func (t *SimpleChaincode) makeTransactions(stub shim.ChaincodeStubInterface, arg
 	if (len(args)-1) % 7 != 0{
 		return shim.Error("Incorrect number of arguments. Expecting: \r\nTaskID, Trans1_From_Enterprise,Trans1_From_Account,Trans1_To_Enterprise,Trans1_to_Account,Trans1_Amount,Trans1_Date,Trans1_Time,trans2_From_Enterprise,trans2_From_Account,trans2_To_Enterprise,trans2_to_Account,trans2_Amount,trans2_Date,trans2_Time,...  ")
 	}
-	taskId := PREFIX_TASK+args[0]
-	taskAsBytes, err := stub.GetState(taskId)
+	taskId := args[0]
+	taskAsBytes, err := t.getTaskAsBytes(stub, taskId)
 
 	if err != nil {
 		return shim.Error("Failed to get task: " + err.Error())
 	} else if taskAsBytes != nil {
-		fmt.Println("This task already exists: " + args[0])
 		return shim.Error("This task already exists: " + args[0])
 	}
 
@@ -240,8 +205,9 @@ func (t *SimpleChaincode) makeTransactions(stub shim.ChaincodeStubInterface, arg
 		if err != nil{
 			return shim.Success(nil)
 		}
+
 		index := 7*i+1
-		now := time.Now()
+		now := now()
 		transIdSeed := strconv.FormatUint(uint64(id), 10)
 		fromEnterpriseId := args[index]
 		fromAccountId := args[index+1]
@@ -259,11 +225,11 @@ func (t *SimpleChaincode) makeTransactions(stub shim.ChaincodeStubInterface, arg
 
 		fromBalance, err := t.addBalance(stub,fromEnterpriseId,fromAccountId,-1*amount,tmpEnterprises)
 		if err != nil{
-			shim.Error(err.Error())
+			return shim.Error(err.Error())
 		}
 		toBalance, err := t.addBalance(stub,toEnterpriseId,toAccountId,amount,tmpEnterprises)
 		if err != nil{
-			shim.Error(err.Error())
+			return shim.Error(err.Error())
 		}
 
 		transaction := &Transaction{
@@ -274,49 +240,22 @@ func (t *SimpleChaincode) makeTransactions(stub shim.ChaincodeStubInterface, arg
 			operDate,operTime,
 			transDate,transTime}
 
-		transactionJSONasBytes, err := json.Marshal(transaction)
-		err = stub.PutState(transId, transactionJSONasBytes) 
-		if err != nil {
+		err = t.saveTransaction(stub, transaction)
+		if err != nil{
 			return shim.Error(err.Error())
 		}
-
-		indexName := "enterprise~account~date~transaction"
-		indexValue := []byte{0x00}
-		
-		indexKey, err := stub.CreateCompositeKey(indexName, []string{transaction.FromEnterprise, transaction.FromAccount, transaction.TransactionDate, transaction.TransactionID})
-		if err != nil {
-			return shim.Error(err.Error())
-		}
-		stub.PutState(indexKey, indexValue)
-
-		if transaction.FromEnterprise != transaction.ToEnterprise || transaction.FromAccount != transaction.ToAccount{
-			indexKey, err := stub.CreateCompositeKey(indexName, []string{transaction.ToEnterprise, transaction.ToAccount, transaction.TransactionDate, transaction.TransactionID})
-			if err != nil {
-				return shim.Error(err.Error())
-			}
-			stub.PutState(indexKey, indexValue)
-		}
-
 		task.TransactionIDList = append(task.TransactionIDList,transId)
 	}
-	for enterpriseId, enterprise := range tmpEnterprises {
-        enterpriseJSONasBytes, err := json.Marshal(enterprise)
-		if err != nil{
-			shim.Error(err.Error())
-		}
-		err = stub.PutState(PREFIX_ENTERPRISE+enterpriseId, enterpriseJSONasBytes)
+	for _, enterprise := range tmpEnterprises {
+        err = t.saveEnterprise(stub, &enterprise)
     	if err != nil{
 			shim.Error(err.Error())
 		}
 	}
-	taskJSONasBytes, err := json.Marshal(task)
-	if err != nil {
-		return shim.Error(err.Error())
-	}
 
-	err = stub.PutState(taskId, taskJSONasBytes)
-	if err != nil {
-		return shim.Error(err.Error())
+	err = t.saveTask(stub, task)
+	if err != nil{
+		shim.Error(err.Error())
 	}
 
 	return shim.Success(nil)
@@ -327,11 +266,9 @@ func (t *SimpleChaincode) getTask(stub shim.ChaincodeStubInterface, args []strin
 		return shim.Error("Incorrect number of arguments. Expecting 1")
 	}
 
-	taskId := PREFIX_TASK+args[0]
-	taskAsBytes, err := stub.GetState(taskId)
-
+	taskAsBytes, err := t.getTaskAsBytes(stub, args[0])
 	if err != nil {
-		return shim.Error("Failed to get Enterprise: " + err.Error())
+		return shim.Error(err.Error())
 	} else if taskAsBytes == nil {
 		fmt.Println("This task don't exists: " + args[0])
 		return shim.Error("This task don't exists: " + args[0])
@@ -371,7 +308,7 @@ func (t *SimpleChaincode) queryTransactionsByDate(stub shim.ChaincodeStubInterfa
 		buffer.WriteString(queryResultKey)
 		buffer.WriteString("\"")
 
-		buffer.WriteString(", \"Record\":")
+		buffer.WriteString(", \"Transaction\":")
 		// Record is a JSON object, so we write as-is
 		buffer.WriteString(string(queryResultValue))
 		buffer.WriteString("}")
@@ -381,6 +318,227 @@ func (t *SimpleChaincode) queryTransactionsByDate(stub shim.ChaincodeStubInterfa
 
 	return shim.Success(buffer.Bytes())
 }
+
+func (t *SimpleChaincode) getTransaction(stub shim.ChaincodeStubInterface, args []string) pb.Response {
+	if(len(args) == 0){
+		return shim.Error("Incorrect number of arguments. Expecting 1")
+	}
+
+	transId := args[0]
+	transAsBytes, err := t.getTransactionAsBytes(stub, transId)
+
+	if err != nil {
+		return shim.Error(err.Error())
+	} else if transAsBytes == nil {
+		return shim.Error("This transaction don't exists: " + transId)
+	}
+
+	return shim.Success(transAsBytes)
+}
+
+func (t *SimpleChaincode) getEnterprise(stub shim.ChaincodeStubInterface, args []string) pb.Response {
+	if(len(args) == 0){
+		return shim.Error("Incorrect number of arguments. Expecting 1")
+	}
+
+	EnterpriseAsBytes, err := t.getEnterpriseAsBytes(stub, args[0])
+
+	if err != nil {
+		return shim.Error("Failed to get Enterprise: " + err.Error())
+	} else if EnterpriseAsBytes == nil {
+		fmt.Println("This Enterprise don't exists: " + args[0])
+		return shim.Error("This Enterprise don't exists: " + args[0])
+	}
+
+	return shim.Success(EnterpriseAsBytes)
+}
+
+// func (t *SimpleChaincode) queryTransactionByAccount(stub shim.ChaincodeStubInterface, args []string) pb.Response {
+// 	if len(args) < 2 {
+// 		return shim.Error("Incorrect number of arguments. Expecting 2")
+// 	}
+
+// 	enterpriseId := args[0]
+// 	accountId := args[1]
+
+// 	resultsIterator, err := stub.PartialCompositeKeyQuery("enterprise~account~date~transaction", []string{enterpriseId, accountId})
+// 	if err != nil {
+// 		return shim.Error(err.Error())
+// 	}
+
+// 	defer resultsIterator.Close()
+// 	var buffer bytes.Buffer
+// 	buffer.WriteString("[")
+// 	bArrayMemberAlreadyWritten := false
+
+// 	// Iterate through result set and for each marble found, transfer to newOwner
+// 	var i int
+// 	for i = 0; resultsIterator.HasNext(); i++ {
+// 		// Note that we don't get the value (2nd return variable), we'll just get the marble name from the composite key
+// 		nameKey, _, err := resultsIterator.Next()
+// 		if err != nil {
+// 			return shim.Error(err.Error())
+// 		}
+// 		if bArrayMemberAlreadyWritten == true {
+// 			buffer.WriteString(",")
+// 		}
+
+// 		_, compositeKeyParts, err := stub.SplitCompositeKey(nameKey)
+// 		if err != nil {
+// 			return shim.Error(err.Error())
+// 		}
+// 		// enterprise := compositeKeyParts[0]
+// 		// account := compositeKeyParts[1]
+// 		// date := compositeKeyParts[2]
+// 		transactionId := compositeKeyParts[3]
+// 		transAsBytes, err := t.getTransactionAsBytes(stub, transactionId)
+
+// 		if err != nil {
+// 			return shim.Error(err.Error())
+// 		} else if transAsBytes == nil {
+// 			return shim.Error("This transaction don't exists: " + transactionId)
+// 		}
+// 		buffer.WriteString("{")
+// 		buffer.WriteString("\"TransactionID\":\"")
+// 		buffer.WriteString(transactionId)
+// 		buffer.WriteString("\",\"Transaction\":")
+// 		buffer.WriteString(string(transAsBytes))
+// 		buffer.WriteString("}")
+// 		bArrayMemberAlreadyWritten = true
+// 	}
+// 	buffer.WriteString("]")
+
+// 	return shim.Success(buffer.Bytes())
+// }
+
+
+func (t *SimpleChaincode) queryTransaction(stub shim.ChaincodeStubInterface, args []string)pb.Response{
+	if len(args) == 0 {
+		return shim.Error("Incorrect number of arguments")
+	}
+
+	resultsIterator, err := stub.PartialCompositeKeyQuery("enterprise~account~date~transaction", args)
+	if err != nil {
+		return shim.Error(err.Error())
+	}
+
+	defer resultsIterator.Close()
+	var buffer bytes.Buffer
+	buffer.WriteString("[")
+	bArrayMemberAlreadyWritten := false
+
+	// Iterate through result set and for each marble found, transfer to newOwner
+	var i int
+	for i = 0; resultsIterator.HasNext(); i++ {
+		// Note that we don't get the value (2nd return variable), we'll just get the marble name from the composite key
+		nameKey, _, err := resultsIterator.Next()
+		if err != nil {
+			return shim.Error(err.Error())
+		}
+		if bArrayMemberAlreadyWritten == true {
+			buffer.WriteString(",")
+		}
+
+		_, compositeKeyParts, err := stub.SplitCompositeKey(nameKey)
+		if err != nil {
+			return shim.Error(err.Error())
+		}
+		// enterprise := compositeKeyParts[0]
+		// account := compositeKeyParts[1]
+		// date := compositeKeyParts[2]
+		transactionId := compositeKeyParts[3]
+		transAsBytes, err := t.getTransactionAsBytes(stub, transactionId)
+
+		if err != nil {
+			return shim.Error(err.Error())
+		} else if transAsBytes == nil {
+			return shim.Error("This transaction don't exists: " + transactionId)
+		}
+		buffer.WriteString("{")
+		buffer.WriteString("\"TransactionID\":\"")
+		buffer.WriteString(transactionId)
+		buffer.WriteString("\",\"Transaction\":")
+		buffer.WriteString(string(transAsBytes))
+		buffer.WriteString("}")
+		bArrayMemberAlreadyWritten = true
+	}
+	buffer.WriteString("]")
+
+	return shim.Success(buffer.Bytes())
+}
+
+
+
+func (t *SimpleChaincode) getEnterpriseAsBytes(stub shim.ChaincodeStubInterface, enterpriseId string) ([]byte, error) {
+	innerEnterpriseId := PREFIX_ENTERPRISE+enterpriseId
+	EnterpriseAsBytes, err := stub.GetState(innerEnterpriseId)
+
+	if err != nil {
+		return nil, errors.New("Failed to get Enterprise: " + err.Error())
+	} else if EnterpriseAsBytes == nil {
+		return nil, nil
+	}
+
+	return EnterpriseAsBytes,nil
+}
+func (t *SimpleChaincode) hasEnterprise(stub shim.ChaincodeStubInterface, enterpriseId string) (bool, error){
+	enterpriseAsBytes, err := t.getEnterpriseAsBytes(stub,enterpriseId)
+
+	if err != nil {
+		return false, err
+	} else if enterpriseAsBytes == nil {
+		return false, nil
+	} else{
+		return true, nil
+	}
+}
+func (t *SimpleChaincode) addAccountsToEnterprise(enterprise *Enterprise, args []string) (error) {
+	if len(args) == 0 {
+		return nil
+	}
+	if len(args)%2 != 0 {
+		return errors.New("wrong number of account arguments")
+	}
+
+	accountsCnt := (len(args))/2
+	accounts := enterprise.Accounts
+	if accounts == nil{
+		accounts = make(map[string]Account)
+		enterprise.Accounts = accounts
+	}
+	// verify accounts whether is already existed
+	for i:=0;i<accountsCnt;i++ {
+		accountId := args[2*i]
+		if _, ok := accounts[accountId]; ok{
+			return errors.New("thie account already exists: "+accountId)
+		}
+	}
+
+	// add accounts
+	for i:=0;i<accountsCnt;i++ {
+		accountId := args[2*i]
+		balance := args[2*i+1]
+		account := Account{accountId, balance}
+		accounts[accountId] = account
+	}
+	
+	return nil
+}
+func (t *SimpleChaincode) saveEnterprise(stub shim.ChaincodeStubInterface, enterprise *Enterprise) (error) {
+	enterpriseJSONasBytes, err := json.Marshal(enterprise)
+	if err != nil {
+		return err
+	}
+
+	innerEnterpriseId := PREFIX_ENTERPRISE+enterprise.EnterpriseID
+
+	err = stub.PutState(innerEnterpriseId, enterpriseJSONasBytes)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 
 func (t *SimpleChaincode) addBalance(stub shim.ChaincodeStubInterface, enterpriseId string, accountId string, amount int, tmpEnterprises map[string]Enterprise) (int,error){
 	enterprise, ok:= tmpEnterprises[enterpriseId]
@@ -413,104 +571,88 @@ func (t *SimpleChaincode) addBalance(stub shim.ChaincodeStubInterface, enterpris
 	// err = stub.PutState(PREFIX_ENTERPRISE+fromEnterpriseId, fromEnterpriseJSONasBytes) 
 	return accountBalance,nil
 }
-func (t *SimpleChaincode) getTransaction(stub shim.ChaincodeStubInterface, args []string) pb.Response {
-	if(len(args) == 0){
-		return shim.Error("Incorrect number of arguments. Expecting 1")
-	}
 
-	transId := args[0]
-	transAsBytes, err := stub.GetState(transId)
+func (t *SimpleChaincode) getTaskAsBytes(stub shim.ChaincodeStubInterface, taskId string) ([]byte, error) {
+	innerTaskId := PREFIX_TASK + taskId
+	taskAsBytes, err := stub.GetState(innerTaskId)
 
 	if err != nil {
-		return shim.Error("Failed to get transaction: " + err.Error())
-	} else if transAsBytes == nil {
-		fmt.Println("This transaction don't exists: " + args[0])
-		return shim.Error("This transaction don't exists: " + args[0])
+		return nil, errors.New("Failed to get Transaction: " + err.Error())
+	} else if taskAsBytes == nil {
+		return nil, nil
 	}
 
-	return shim.Success(transAsBytes)
-}
-func (t *SimpleChaincode) getEnterprise(stub shim.ChaincodeStubInterface, args []string) pb.Response {
-	if(len(args) == 0){
-		return shim.Error("Incorrect number of arguments. Expecting 1")
-	}
-
-	EnterpriseAsBytes, err := t.getEnterpriseAsBytes(stub, args[0])
-
-	if err != nil {
-		return shim.Error("Failed to get Enterprise: " + err.Error())
-	} else if EnterpriseAsBytes == nil {
-		fmt.Println("This Enterprise don't exists: " + args[0])
-		return shim.Error("This Enterprise don't exists: " + args[0])
-	}
-
-	return shim.Success(EnterpriseAsBytes)
+	return taskAsBytes,nil
 }
 
-func (t *SimpleChaincode) getEnterpriseAsBytes(stub shim.ChaincodeStubInterface, EnterpriseId string) ([]byte, error) {
-	innerEnterpriseId := PREFIX_ENTERPRISE+EnterpriseId
-	EnterpriseAsBytes, err := stub.GetState(innerEnterpriseId)
-
+func (t *SimpleChaincode) saveTask(stub shim.ChaincodeStubInterface, task *TransactionTask) (error) {
+	taskJSONasBytes, err := json.Marshal(task)
 	if err != nil {
-		return nil, errors.New("Failed to get Enterprise: " + err.Error())
-	} else if EnterpriseAsBytes == nil {
-		fmt.Println("This Enterprise don't exists: " + EnterpriseId)
-		return nil, errors.New("This Enterprise don't exists: " + EnterpriseId)
+		return err
 	}
-
-	return EnterpriseAsBytes,nil
+	
+	taskId := PREFIX_TASK + task.TaskID
+	err = stub.PutState(taskId, taskJSONasBytes)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
-func (t *SimpleChaincode) queryTransactionByAccount(stub shim.ChaincodeStubInterface, args []string) pb.Response {
-	if len(args) < 2 {
-		return shim.Error("Incorrect number of arguments. Expecting 2")
-	}
 
-	enterpriseId := args[0]
-	accountId := args[1]
 
-	resultsIterator, err := stub.PartialCompositeKeyQuery("enterprise~account~date~transaction", []string{enterpriseId, accountId})
+func (t *SimpleChaincode) getTransactionAsBytes(stub shim.ChaincodeStubInterface, transactionId string) ([]byte, error) {
+	transactionAsBytes, err := stub.GetState(transactionId)
+
 	if err != nil {
-		return shim.Error(err.Error())
+		return nil, errors.New("Failed to get Transaction: " + err.Error())
+	} else if transactionAsBytes == nil {
+		return nil, errors.New("This Transaction don't exists: " + transactionId)
 	}
-	defer resultsIterator.Close()
-	var buffer bytes.Buffer
-	buffer.WriteString("[")
-	bArrayMemberAlreadyWritten := false
 
-	// Iterate through result set and for each marble found, transfer to newOwner
-	var i int
-	for i = 0; resultsIterator.HasNext(); i++ {
-		// Note that we don't get the value (2nd return variable), we'll just get the marble name from the composite key
-		nameKey, _, err := resultsIterator.Next()
+	return transactionAsBytes,nil
+}
+
+func (t *SimpleChaincode) saveTransaction(stub shim.ChaincodeStubInterface, transaction *Transaction)(error){
+	transactionJSONasBytes, err := json.Marshal(transaction)
+	transId := transaction.TransactionID
+
+	err = stub.PutState(transId, transactionJSONasBytes) 
+	if err != nil {
+		return err
+	}
+
+	indexName := "enterprise~account~date~transaction"
+	indexValue := []byte{0x00}
+	
+	indexKey, err := stub.CreateCompositeKey(indexName, []string{transaction.FromEnterprise, transaction.FromAccount, transaction.TransactionDate, transaction.TransactionID})
+	if err != nil {
+		return err
+	}
+	err = stub.PutState(indexKey, indexValue)
+	if err != nil {
+		return err
+	}
+
+	if transaction.FromEnterprise != transaction.ToEnterprise || transaction.FromAccount != transaction.ToAccount{
+		indexKey, err := stub.CreateCompositeKey(indexName, []string{transaction.ToEnterprise, transaction.ToAccount, transaction.TransactionDate, transaction.TransactionID})
 		if err != nil {
-			return shim.Error(err.Error())
+			return err
 		}
-		if bArrayMemberAlreadyWritten == true {
-			buffer.WriteString(",")
-		}
-
-		_, compositeKeyParts, err := stub.SplitCompositeKey(nameKey)
+		
+		err = stub.PutState(indexKey, indexValue)
 		if err != nil {
-			return shim.Error(err.Error())
+			return err
 		}
-		// enterprise := compositeKeyParts[0]
-		// account := compositeKeyParts[1]
-		// date := compositeKeyParts[2]
-		transaction := compositeKeyParts[3]
-
-		buffer.WriteString("{\"TransactionId\":\"")
-		buffer.WriteString(transaction)
-		buffer.WriteString("\"}")
-		bArrayMemberAlreadyWritten = true
 	}
-	buffer.WriteString("]")
 
-	return shim.Success(buffer.Bytes())
+	return nil
 }
 
-
-
+func now() time.Time{
+	loc, _:= time.LoadLocation("Asia/Chongqing")
+	return time.Now().In(loc)
+}
 // snowflake
 // These constants are the bit lengths of Sonyflake ID parts.
 const (
@@ -558,7 +700,7 @@ func NewSonyflake(st Settings) *Sonyflake {
 	sf.mutex = new(sync.Mutex)
 	sf.sequence = uint16(1<<BitLenSequence - 1)
 
-	if st.StartTime.After(time.Now()) {
+	if st.StartTime.After(now()) {
 		return nil
 	}
 	if st.StartTime.IsZero() {
@@ -610,12 +752,12 @@ func toSonyflakeTime(t time.Time) int64 {
 }
 
 func currentElapsedTime(startTime int64) int64 {
-	return toSonyflakeTime(time.Now()) - startTime
+	return toSonyflakeTime(now()) - startTime
 }
 
 func sleepTime(overtime int64) time.Duration {
 	return time.Duration(overtime)*10*time.Millisecond -
-		time.Duration(time.Now().UTC().UnixNano()%sonyflakeTimeUnit)*time.Nanosecond
+		time.Duration(now().UTC().UnixNano()%sonyflakeTimeUnit)*time.Nanosecond
 }
 
 func (sf *Sonyflake) toID() (uint64, error) {

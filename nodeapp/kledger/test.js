@@ -15,6 +15,15 @@
  */
 // This is Sample end-to-end standalone program that focuses on exercising all
 // parts of the fabric APIs in a happy-path scenario
+
+
+// in cli container:
+// peer chaincode deploy -C myc1 -n mycc -p kledger -c '{"Function":"version", "Args":[]}'
+
+// peer chaincode upgrade -C myc1 -n mycc -p kledger -c '{"Function":"version", "Args":[]}'
+
+// peer chaincode invoke -C myc1 -n mycc -c '{"function":"version","Args":[]}'
+
 'use strict';
 
 var log4js = require('log4js');
@@ -36,15 +45,15 @@ var chain;
 var eventhub;
 var tx_id = null;
 
-var enterpriseId = "kaka3";
-var taskid = 'test_task_17';
+var enterpriseId = "kaka1";
+var taskid = 'test_task_7';
 var transIds = [];
 
 // getChaincodeVersion();
 // createEnterprise(
 //     enterpriseId, [
 //         { "id": "0001", "balance": 100 },
-//         { "id": "0002", "balance": 200 },
+//         { "id": "0002", "balance": 170 },
 //         { "id": "0003", "balance": 300 },
 //         { "id": "0004", "balance": 400 },
 //         { "id": "0005", "balance": 500 }
@@ -55,17 +64,19 @@ var transIds = [];
 //     enterpriseId, [
 //         { "id": "2001", "balance": 2100 },
 //         { "id": "2002", "balance": 2200 },
-//         { "id": "2003", "balance": 2300 }
+//         { "id": "2004", "balance": 2400 }
 //     ]
 // );
 
 // getEnterprise(enterpriseId);
 // makeTransactions(
 //     taskid, [
-//         { "fromEnterprise": enterpriseId, "fromAccount": "0001", "toEnterprise": enterpriseId, "toAccount": "0002", "amount": "50", "date": "20170325", "time": "120000" }, //0001 30, 0002 260
-//         { "fromEnterprise": enterpriseId, "fromAccount": "2001", "toEnterprise": enterpriseId, "toAccount": "0001", "amount": "20", "date": "20170326", "time": "121000" }, //2001 2100, 0001 50
-//         { "fromEnterprise": enterpriseId, "fromAccount": "2001", "toEnterprise": enterpriseId, "toAccount": "0001", "amount": "30", "date": "20170327", "time": "121000" }, //2001 2070, 0001 80
-//         { "fromEnterprise": enterpriseId, "fromAccount": "0002", "toEnterprise": enterpriseId, "toAccount": "2001", "amount": "80", "date": "20170328", "time": "121000" } //0001 0, 2001 2150
+//         { "fromEnterprise": enterpriseId, "fromAccount": "0001", "toEnterprise": enterpriseId, "toAccount": "2002", "amount": "50", "date": "20170329", "time": "121000" },
+//         { "fromEnterprise": enterpriseId, "fromAccount": "0004", "toEnterprise": enterpriseId, "toAccount": "2004", "amount": "40", "date": "20170329", "time": "121000" },
+//         { "fromEnterprise": enterpriseId, "fromAccount": "2002", "toEnterprise": enterpriseId, "toAccount": "0002", "amount": "30", "date": "20170329", "time": "121000" },
+//         { "fromEnterprise": enterpriseId, "fromAccount": "0005", "toEnterprise": enterpriseId, "toAccount": "2004", "amount": "50", "date": "20170329", "time": "121000" },
+//         { "fromEnterprise": enterpriseId, "fromAccount": "0001", "toEnterprise": enterpriseId, "toAccount": "2001", "amount": "50", "date": "20170329", "time": "120000" },
+//         { "fromEnterprise": enterpriseId, "fromAccount": "0003", "toEnterprise": enterpriseId, "toAccount": "2004", "amount": "30", "date": "20170329", "time": "121000" },
 //     ]
 // );
 
@@ -73,8 +84,8 @@ var transIds = [];
 //20170327_3822591408144996
 
 // getTransaction(transIds[1]);
-// queryTransactionsByDate("20170326", "20170327");
-queryTransactionByAccount(enterpriseId, "0001")
+// queryTransactionsByDate("20170329", "20170331");
+queryTransaction(enterpriseId, "0001", "20170329")
 
 function getChaincodeVersion() {
     _init(false);
@@ -187,7 +198,7 @@ function addAccounts(enterpriseId, accounts) {
             // send proposal to endorser
             var request = {
                 chaincodeId: config.chaincodeID,
-                fcn: "addAccountsToEnterprise",
+                fcn: "addAccounts",
                 args: args,
                 chainId: config.channelID,
                 txId: tx_id,
@@ -197,8 +208,7 @@ function addAccounts(enterpriseId, accounts) {
         }
     ).then(
         function(results) {
-            logger.info('Successfully obtained proposal responses from endorsers');
-
+            logger.info('Successfully obtained proposal responses from endorsers: ' + (results[0][0].name == 'Error'));
             return helper.processProposal(chain, results, 'move');
         }
     ).then(_processProposalResult).catch(
@@ -423,7 +433,7 @@ function queryTransactionsByDate(from, to) {
     );
 }
 
-function queryTransactionByAccount(enterpriseId, accountId) {
+function queryTransaction(enterpriseId, accountId, date) {
     _init(false);
     hfc.newDefaultKeyValueStore({
         path: config.keyValueStore
@@ -433,11 +443,22 @@ function queryTransactionByAccount(enterpriseId, accountId) {
     }).then(
         function(admin) {
             logger.info('Successfully obtained enrolled user to perform query');
-
             logger.info('Executing Query');
             var targets = [];
             for (var i = 0; i < config.peers.length; i++) {
                 targets.push(config.peers[i]);
+            }
+            var args = [];
+            if (enterpriseId != null && enterpriseId != "") {
+                args.push(enterpriseId);
+            }
+
+            if (accountId != null && accountId != "") {
+                args.push(accountId);
+            }
+
+            if (date != null && date != "") {
+                args.push(date);
             }
             //chaincode query request
             var request = {
@@ -446,8 +467,8 @@ function queryTransactionByAccount(enterpriseId, accountId) {
                 chainId: config.channelID,
                 txId: utils.buildTransactionID(),
                 nonce: utils.getNonce(),
-                fcn: "queryTransactionByAccount",
-                args: [enterpriseId, accountId]
+                fcn: "queryTransaction",
+                args: args
             };
             // Query chaincode
             return chain.queryByChaincode(request);
