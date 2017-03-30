@@ -14,7 +14,7 @@ import (
 	"sync"
 	"time"
 )
-const Version string = "0.0.5"
+const Version string = "0.0.8"
 
 const ENTERPRISE_STATUS_NORMAL = "NORMAL"
 const ENTERPRISE_STATUS_CLOSED = "CLOSED"
@@ -61,7 +61,7 @@ type Enterprise struct{
 }
 
 type Account struct{
-	AmountID		string `json:"AmountID"`
+	AccountID		string `json:"AccountID"`
 	Balance		string `json:"Balance"`
 }
 
@@ -346,8 +346,7 @@ func (t *SimpleChaincode) getEnterprise(stub shim.ChaincodeStubInterface, args [
 	if err != nil {
 		return shim.Error("Failed to get Enterprise: " + err.Error())
 	} else if EnterpriseAsBytes == nil {
-		fmt.Println("This Enterprise don't exists: " + args[0])
-		return shim.Error("This Enterprise don't exists: " + args[0])
+		shim.Success(nil)
 	}
 
 	return shim.Success(EnterpriseAsBytes)

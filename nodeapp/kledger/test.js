@@ -36,7 +36,7 @@ var Orderer = require('fabric-client/lib/Orderer.js');
 var EventHub = require('fabric-client/lib/EventHub.js');
 
 var config = require('./config.json');
-var helper = require('../helper.js');
+var helper = require('./lib/helper.js');
 
 logger.setLevel('DEBUG');
 
@@ -46,7 +46,7 @@ var eventhub;
 var tx_id = null;
 
 var enterpriseId = "kaka1";
-var taskid = 'test_task_7';
+var taskid = 'test_task_1';
 var transIds = [];
 
 // getChaincodeVersion();
@@ -85,7 +85,7 @@ var transIds = [];
 
 // getTransaction(transIds[1]);
 // queryTransactionsByDate("20170329", "20170331");
-queryTransaction(enterpriseId, "0001", "20170329")
+// queryTransaction(enterpriseId, "0001", "20170329")
 
 function getChaincodeVersion() {
     _init(false);

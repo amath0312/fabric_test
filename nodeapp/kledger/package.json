@@ -1,0 +1,21 @@
+{
+    "name": "kledger",
+    "version": "0.0.1",
+    "description": "call kledger on fabric using NodeSDK apis",
+    "main": "server.js",
+    "keywords": [
+        "kledger"
+    ],
+    "engines": {
+        "node": ">=4.5.0",
+        "npm": ">=2.15.9"
+    },
+    "devDependencies": {
+        "fabric-client": "^0.1.0",
+        "fabric-ca-client": "^0.1.0",
+        "log4js": "^0.6.38",
+        "winston": "^2.2.0",
+        "express": "^4.15.0"
+    },
+    "license": "Apache-2.0"
+}
