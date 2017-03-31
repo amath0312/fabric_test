@@ -71,12 +71,12 @@ var transIds = [];
 // getEnterprise(enterpriseId);
 // makeTransactions(
 //     taskid, [
-//         { "fromEnterprise": enterpriseId, "fromAccount": "0001", "toEnterprise": enterpriseId, "toAccount": "2002", "amount": "50", "date": "20170329", "time": "121000" },
-//         { "fromEnterprise": enterpriseId, "fromAccount": "0004", "toEnterprise": enterpriseId, "toAccount": "2004", "amount": "40", "date": "20170329", "time": "121000" },
-//         { "fromEnterprise": enterpriseId, "fromAccount": "2002", "toEnterprise": enterpriseId, "toAccount": "0002", "amount": "30", "date": "20170329", "time": "121000" },
-//         { "fromEnterprise": enterpriseId, "fromAccount": "0005", "toEnterprise": enterpriseId, "toAccount": "2004", "amount": "50", "date": "20170329", "time": "121000" },
-//         { "fromEnterprise": enterpriseId, "fromAccount": "0001", "toEnterprise": enterpriseId, "toAccount": "2001", "amount": "50", "date": "20170329", "time": "120000" },
-//         { "fromEnterprise": enterpriseId, "fromAccount": "0003", "toEnterprise": enterpriseId, "toAccount": "2004", "amount": "30", "date": "20170329", "time": "121000" },
+//         { "fromEnterprise": enterpriseId, "fromAccount": "0001", "toEnterprise": enterpriseId, "toAccount": "2002", "amount": "50", "date": "20170329", "time": "121000", "HashID":"aaaaa" },
+//         { "fromEnterprise": enterpriseId, "fromAccount": "0004", "toEnterprise": enterpriseId, "toAccount": "2004", "amount": "40", "date": "20170329", "time": "121000", "HashID":"aaaaa" },
+//         { "fromEnterprise": enterpriseId, "fromAccount": "2002", "toEnterprise": enterpriseId, "toAccount": "0002", "amount": "30", "date": "20170329", "time": "121000", "HashID":"aaaaa" },
+//         { "fromEnterprise": enterpriseId, "fromAccount": "0005", "toEnterprise": enterpriseId, "toAccount": "2004", "amount": "50", "date": "20170329", "time": "121000", "HashID":"aaaaa" },
+//         { "fromEnterprise": enterpriseId, "fromAccount": "0001", "toEnterprise": enterpriseId, "toAccount": "2001", "amount": "50", "date": "20170329", "time": "120000", "HashID":"aaaaa" },
+//         { "fromEnterprise": enterpriseId, "fromAccount": "0003", "toEnterprise": enterpriseId, "toAccount": "2004", "amount": "30", "date": "20170329", "time": "121000", "HashID":"aaaaa" },
 //     ]
 // );
 
@@ -237,7 +237,7 @@ function makeTransactions(taskId, transactions) {
             args.push(taskId);
             transactions.forEach(function(t) {
                 //Trans1_From_Enterprise,Trans1_From_Account,Trans1_To_Enterprise,Trans1_to_Account,Trans1_Amount,Trans1_Date,Trans1_Time
-                args.push(t.fromEnterprise, t.fromAccount, t.toEnterprise, t.toAccount, t.amount.toString(), t.date, t.time);
+                args.push(t.fromEnterprise, t.fromAccount, t.toEnterprise, t.toAccount, t.amount.toString(), t.date, t.time, t.HashID);
             });
             logger.info(args);
             // send proposal to endorser

@@ -14,7 +14,7 @@ import (
 	"sync"
 	"time"
 )
-const Version string = "0.0.8"
+const Version string = "0.0.10"
 
 const ENTERPRISE_STATUS_NORMAL = "NORMAL"
 const ENTERPRISE_STATUS_CLOSED = "CLOSED"
@@ -51,6 +51,7 @@ type Transaction struct {
 	OperateTime       	string `json:"OperateTime"`
 	TransactionDate     string `json:"TransactionDate"`
 	TransactionTime     string `json:"TransactionTime"`
+	HashID     string `json:"HashID"`
 }
 
 // Enterprise id is like ENTPRISE_Enterpriseid
@@ -182,11 +183,12 @@ func (t *SimpleChaincode) addAccounts(stub shim.ChaincodeStubInterface, args []s
 }
 
 func (t *SimpleChaincode) makeTransactions(stub shim.ChaincodeStubInterface, args []string) pb.Response {
+	transactionParamsCount := 8
 	if(len(args) == 0){
 		return shim.Error("Incorrect number of arguments. Expecting more than 1")
 	}
-	if (len(args)-1) % 7 != 0{
-		return shim.Error("Incorrect number of arguments. Expecting: \r\nTaskID, Trans1_From_Enterprise,Trans1_From_Account,Trans1_To_Enterprise,Trans1_to_Account,Trans1_Amount,Trans1_Date,Trans1_Time,trans2_From_Enterprise,trans2_From_Account,trans2_To_Enterprise,trans2_to_Account,trans2_Amount,trans2_Date,trans2_Time,...  ")
+	if (len(args)-1) % transactionParamsCount != 0{
+		return shim.Error("Incorrect number of arguments. Expecting: \r\nTaskID, Trans1_From_Enterprise,Trans1_From_Account,Trans1_To_Enterprise,Trans1_to_Account,Trans1_Amount,Trans1_Date,Trans1_Time,Trans1_HashID,trans2_From_Enterprise,trans2_From_Account,trans2_To_Enterprise,trans2_to_Account,trans2_Amount,trans2_Date,trans2_Time,Trans2_HashID...the number of arguments is: "+strconv.Itoa(len(args)))
 	}
 	taskId := args[0]
 	taskAsBytes, err := t.getTaskAsBytes(stub, taskId)
@@ -198,7 +200,7 @@ func (t *SimpleChaincode) makeTransactions(stub shim.ChaincodeStubInterface, arg
 	}
 
 	task := &TransactionTask{taskId,[]string{}}
-	transactionCnt := (len(args)-1)/7
+	transactionCnt := (len(args)-1)/transactionParamsCount
 	tmpEnterprises := make(map[string]Enterprise)
 	for i:=0;i<transactionCnt;i++{
 		id,err := sf.NextID()
@@ -206,7 +208,7 @@ func (t *SimpleChaincode) makeTransactions(stub shim.ChaincodeStubInterface, arg
 			return shim.Success(nil)
 		}
 
-		index := 7*i+1
+		index := transactionParamsCount*i+1
 		now := now()
 		transIdSeed := strconv.FormatUint(uint64(id), 10)
 		fromEnterpriseId := args[index]
@@ -219,6 +221,8 @@ func (t *SimpleChaincode) makeTransactions(stub shim.ChaincodeStubInterface, arg
 		}
 		transDate := args[index+5]
 		transTime := args[index+6]
+		hashId := args[index+7]
+		
 		operDate := fmt.Sprintf("%04d%02d%02d",now.Year(),now.Month(),now.Day())
 		operTime := fmt.Sprintf("%02d%02d%02d.%03d",now.Hour(), now.Minute(), now.Second(),now.Nanosecond()/1000000)
 		transId := fmt.Sprintf("%s_%s",transDate,transIdSeed)
@@ -238,7 +242,8 @@ func (t *SimpleChaincode) makeTransactions(stub shim.ChaincodeStubInterface, arg
 			toEnterpriseId,toAccountId,strconv.Itoa(toBalance),
 			args[index+4],
 			operDate,operTime,
-			transDate,transTime}
+			transDate,transTime,
+			hashId}
 
 		err = t.saveTransaction(stub, transaction)
 		if err != nil{

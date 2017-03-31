@@ -30,7 +30,7 @@ module.exports.makeTransactions = function(taskId, transactions, callback) {
             var args = []
             args.push(taskId);
             transactions.forEach(function(t) {
-                args.push(t.FromEnterprise, t.FromAccount, t.ToEnterprise, t.ToAccount, t.Amount.toString(), t.Date, t.Time);
+                args.push(t.FromEnterprise, t.FromAccount, t.ToEnterprise, t.ToAccount, t.Amount.toString(), t.Date, t.Time, t.HashID);
             });
             logger.info(args);
             // send proposal to endorser
